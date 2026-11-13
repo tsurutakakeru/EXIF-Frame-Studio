@@ -1,0 +1,1730 @@
+<title>EXIF Frame Studio</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<!-- EXIF解析ライブラリ -->
+<script src="https://cdn.jsdelivr.net/npm/exifr@7.1.3/dist/full.umd.js"></script>
+<!-- フォント -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Abril+Fatface&family=Anton&family=Archivo:wght@400..700&family=Bebas+Neue&family=Bodoni+Moda:opsz,wght@6..96,400..700&family=Chivo+Mono:wght@300..700&family=Cinzel:wght@400..700&family=Cormorant+Garamond:wght@400..700&family=Crimson+Pro:wght@300..700&family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;700&family=EB+Garamond:wght@400..700&family=Fira+Code:wght@400..700&family=Fraunces:opsz,wght@9..144,400..700&family=IBM+Plex+Mono:wght@300..700&family=Inter:wght@300..700&family=JetBrains+Mono:wght@300..700&family=Kaisei+Decol&family=Libre+Baskerville:wght@400;700&family=Lora:wght@400..700&family=Manrope:wght@400..700&family=Martian+Mono:wght@400..700&family=Montserrat:wght@300..700&family=Noto+Sans+JP:wght@300..700&family=Noto+Serif+JP:wght@400..700&family=Outfit:wght@400..700&family=Oswald:wght@400..700&family=Playfair+Display:wght@400..700&family=Plus+Jakarta+Sans:wght@400..700&family=Red+Hat+Mono:wght@400..700&family=Roboto+Mono:wght@300..700&family=Share+Tech+Mono&family=Shippori+Antique&family=Shippori+Mincho:wght@400..700&family=Sora:wght@400..700&family=Source+Code+Pro:wght@400..700&family=Space+Grotesk:wght@500;600;700&family=Space+Mono:wght@400;700&family=Spectral:wght@400..700&family=Unica+One&family=Work+Sans:wght@400..700&family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=Zen+Old+Mincho:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+  /* ============ Design tokens — dark-first (darkroom / studio tool) ============ */
+  :root {
+    color-scheme: dark;
+    --bg-app: #0b0c0e;
+    --bg-sidebar: #141518;
+    --bg-card: #1b1d22;
+    --bg-input: #0e0f12;
+    --border: #292b32;
+    --text-main: #f2f3f5;
+    --text-muted: #94979f;
+    --accent: #5b8cff;
+    --accent-hover: #4572e8;
+    --accent-weak: rgba(91, 140, 255, 0.16);
+    --grid-dot: #202227;
+    --shadow: rgba(0, 0, 0, 0.75);
+    --font-ui: 'Inter', 'Noto Sans JP', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-brand: 'Space Grotesk', 'Inter', sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  }
+
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      color-scheme: light;
+      --bg-app: #f3f4f6;
+      --bg-sidebar: #ffffff;
+      --bg-card: #ffffff;
+      --bg-input: #f5f6f8;
+      --border: #e2e4ea;
+      --text-main: #16171b;
+      --text-muted: #6b6f78;
+      --accent: #2f5fe0;
+      --accent-hover: #2650c4;
+      --accent-weak: rgba(47, 95, 224, 0.1);
+      --grid-dot: #e6e7eb;
+      --shadow: rgba(20, 22, 30, 0.18);
+    }
+  }
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --bg-app: #f3f4f6;
+    --bg-sidebar: #ffffff;
+    --bg-card: #ffffff;
+    --bg-input: #f5f6f8;
+    --border: #e2e4ea;
+    --text-main: #16171b;
+    --text-muted: #6b6f78;
+    --accent: #2f5fe0;
+    --accent-hover: #2650c4;
+    --accent-weak: rgba(47, 95, 224, 0.1);
+    --grid-dot: #e6e7eb;
+    --shadow: rgba(20, 22, 30, 0.18);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    height: 100%;
+    background: var(--bg-app);
+  }
+
+  body {
+    font-family: var(--font-ui);
+    color: var(--text-main);
+    overflow: hidden;
+    display: flex;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition-duration: 0.001ms !important; animation-duration: 0.001ms !important; }
+  }
+
+  /* ============ Sidebar ============ */
+  #sidebar {
+    width: min(390px, 88vw);
+    min-width: 300px;
+    background: var(--bg-sidebar);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    z-index: 50;
+    padding-left: env(safe-area-inset-left, 0px);
+  }
+
+  .sidebar-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .sidebar-header h1 {
+    font-family: var(--font-brand);
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+  }
+
+  .badge {
+    font-size: 10px;
+    background: var(--accent-weak);
+    color: var(--accent);
+    padding: 2px 7px;
+    border-radius: 99px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+  }
+
+  .icon-btn {
+    display: none;
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    color: var(--text-main);
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .sidebar-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 18px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    min-width: 0;
+  }
+
+  .sidebar-scroll::-webkit-scrollbar { width: 6px; }
+  .sidebar-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  .section {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .section-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  /* ドロップゾーン */
+  #dropzone {
+    border: 1.5px dashed var(--border);
+    border-radius: 8px;
+    padding: 18px 12px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    background: var(--bg-input);
+  }
+  #dropzone:hover, #dropzone.dragover {
+    border-color: var(--accent);
+    background: var(--accent-weak);
+  }
+  #dropzone p { font-size: 13px; font-weight: 500; }
+  #dropzone span { font-size: 11px; color: var(--text-muted); display: block; margin-top: 4px; }
+
+  /* フォームコントロール */
+  .field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+  .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  label {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-weight: 500;
+    display: flex;
+    justify-content: space-between;
+    gap: 6px;
+  }
+  label span { font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--accent); }
+
+  input[type="text"], select {
+    width: 100%;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    color: var(--text-main);
+    padding: 8px 10px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-family: var(--font-ui);
+    transition: border-color 0.15s;
+    min-width: 0;
+  }
+  input[type="text"]:focus, select:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  input[type="range"] {
+    width: 100%;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+
+  .color-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .swatch {
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: transform 0.1s;
+    flex-shrink: 0;
+  }
+  .swatch:hover { transform: scale(1.1); }
+  input[type="color"] {
+    width: 30px;
+    height: 26px;
+    border: none;
+    background: none;
+    cursor: pointer;
+  }
+
+  .checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-main);
+    cursor: pointer;
+  }
+
+  /* プリセット */
+  #preset-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .preset-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .preset-row .preset-name {
+    flex: 1;
+    min-width: 0;
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+  .preset-row .btn {
+    width: auto;
+    padding: 6px 9px;
+    font-size: 11px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .preset-apply.has-data {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .icon-btn-sm {
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--bg-input);
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    flex-shrink: 0;
+    line-height: 1;
+  }
+  .icon-btn-sm:hover {
+    color: var(--text-main);
+    border-color: var(--accent);
+  }
+
+  /* フッターボタン */
+  .sidebar-footer {
+    padding: 14px 20px calc(14px + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid var(--border);
+    background: var(--bg-sidebar);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .btn {
+    width: 100%;
+    padding: 11px 16px;
+    border-radius: 8px;
+    border: none;
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-family: var(--font-ui);
+  }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
+  .btn-primary:disabled { background: var(--border); color: var(--text-muted); cursor: not-allowed; }
+
+  .btn-secondary {
+    background: var(--bg-input);
+    color: var(--text-main);
+    border: 1px solid var(--border);
+    padding: 6px 10px;
+    font-size: 11px;
+    width: auto;
+  }
+  .btn-secondary:hover:not(:disabled) { border-color: var(--accent); }
+  .btn-secondary:disabled { color: var(--text-muted); cursor: not-allowed; }
+
+  #status-bar {
+    font-size: 11px;
+    color: var(--accent);
+    text-align: center;
+    min-height: 15px;
+  }
+
+  /* ============ Overlay (mobile drawer) ============ */
+  #overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 40;
+  }
+  #overlay.open { display: block; }
+
+  /* ============ メインワークスペース ============ */
+  #workspace {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    background-image: radial-gradient(var(--grid-dot) 1px, transparent 1px);
+    background-size: 20px 20px;
+    background-color: var(--bg-app);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: grab;
+    padding-left: max(0px, env(safe-area-inset-left, 0px));
+    padding-right: env(safe-area-inset-right, 0px);
+    min-width: 0;
+  }
+  #workspace:active { cursor: grabbing; }
+
+  #canvas-wrapper {
+    transform-origin: center center;
+    transition: transform 0.05s ease-out;
+    box-shadow: 0 25px 60px var(--shadow);
+    max-width: 100%;
+  }
+
+  #preview-canvas {
+    display: block;
+    max-width: none;
+    max-height: none;
+  }
+
+  #empty-state {
+    position: absolute;
+    text-align: center;
+    color: var(--text-muted);
+    pointer-events: none;
+    padding: 0 24px;
+  }
+  #empty-state h2 { font-family: var(--font-brand); font-size: 18px; color: var(--text-main); margin-bottom: 6px; }
+  #empty-state p { font-size: 13px; }
+
+  /* ============ ズームコントロール ============ */
+  #zoom-controls {
+    position: absolute;
+    bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--bg-sidebar);
+    border: 1px solid var(--border);
+    padding: 6px 12px;
+    border-radius: 99px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    z-index: 20;
+    box-shadow: 0 8px 24px var(--shadow);
+  }
+  .zoom-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-main);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 6px;
+  }
+  .zoom-btn:hover { background: var(--accent-weak); }
+  #zoom-label {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    min-width: 44px;
+    text-align: center;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ============ モバイル用 開閉ボタン ============ */
+  #menu-toggle {
+    display: none;
+    position: absolute;
+    top: calc(14px + env(safe-area-inset-top, 0px));
+    left: calc(14px + env(safe-area-inset-left, 0px));
+    z-index: 30;
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--bg-sidebar);
+    color: var(--text-main);
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 8px 20px var(--shadow);
+  }
+
+  /* ============ EXIF詳細モーダル ============ */
+  #exif-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    backdrop-filter: blur(4px);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+  #exif-modal.open { display: flex; }
+  .modal-card {
+    background: var(--bg-sidebar);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    width: 100%;
+    max-width: 560px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .modal-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+  }
+  .modal-header strong { font-family: var(--font-brand); font-size: 14px; }
+  .modal-body {
+    padding: 8px 20px 16px;
+    overflow-y: auto;
+    font-size: 12px;
+  }
+  .exif-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .exif-table td {
+    padding: 8px 6px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  .exif-table td:first-child {
+    color: var(--text-muted);
+    font-weight: 600;
+    width: 42%;
+  }
+  .exif-table td:last-child {
+    font-family: var(--font-mono);
+    color: var(--text-main);
+    word-break: break-all;
+  }
+  .exif-empty { color: var(--text-muted); padding: 12px 0; font-size: 12px; }
+
+  /* ============ レスポンシブ（スマホ幅） ============ */
+  @media (max-width: 860px) {
+    #sidebar {
+      position: fixed;
+      inset: 0 auto 0 0;
+      transform: translateX(-100%);
+      transition: transform 0.25s ease;
+      box-shadow: 0 0 40px var(--shadow);
+    }
+    #sidebar.open { transform: translateX(0); }
+    #menu-toggle { display: flex; }
+    .row-2 { grid-template-columns: 1fr 1fr; }
+  }
+
+  @media (min-width: 861px) {
+    #overlay { display: none !important; }
+  }
+</style>
+
+<div id="overlay"></div>
+
+<!-- モバイル開閉トグル -->
+<button id="menu-toggle" aria-label="設定パネルを開く" aria-expanded="false" aria-controls="sidebar">
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+</button>
+
+<!-- 左サイドバー -->
+<aside id="sidebar">
+  <div class="sidebar-header">
+    <h1>EXIF FRAME STUDIO <span class="badge">PRO</span></h1>
+    <button id="open-exif-btn" class="btn btn-secondary" disabled>EXIF詳細</button>
+  </div>
+
+  <div class="sidebar-scroll">
+    <!-- 0. プリセット -->
+    <div class="section">
+      <div class="section-title">
+        Presets
+        <span style="font-weight:400; text-transform:none; letter-spacing:0; color:var(--text-muted); font-size:10px;">お好みの設定を5つまで保存</span>
+      </div>
+      <div id="preset-list">
+        <div class="preset-row" data-slot="1">
+          <input type="text" class="preset-name" id="preset-name-1" data-slot="1" placeholder="プリセット 1" maxlength="24">
+          <button type="button" class="btn btn-secondary preset-apply" data-slot="1" disabled>適用</button>
+          <button type="button" class="btn btn-secondary preset-save" data-slot="1" title="現在の設定をここに保存">保存</button>
+          <button type="button" class="icon-btn-sm preset-clear" data-slot="1" title="このプリセットを削除" aria-label="プリセット1を削除">✕</button>
+        </div>
+        <div class="preset-row" data-slot="2">
+          <input type="text" class="preset-name" id="preset-name-2" data-slot="2" placeholder="プリセット 2" maxlength="24">
+          <button type="button" class="btn btn-secondary preset-apply" data-slot="2" disabled>適用</button>
+          <button type="button" class="btn btn-secondary preset-save" data-slot="2" title="現在の設定をここに保存">保存</button>
+          <button type="button" class="icon-btn-sm preset-clear" data-slot="2" title="このプリセットを削除" aria-label="プリセット2を削除">✕</button>
+        </div>
+        <div class="preset-row" data-slot="3">
+          <input type="text" class="preset-name" id="preset-name-3" data-slot="3" placeholder="プリセット 3" maxlength="24">
+          <button type="button" class="btn btn-secondary preset-apply" data-slot="3" disabled>適用</button>
+          <button type="button" class="btn btn-secondary preset-save" data-slot="3" title="現在の設定をここに保存">保存</button>
+          <button type="button" class="icon-btn-sm preset-clear" data-slot="3" title="このプリセットを削除" aria-label="プリセット3を削除">✕</button>
+        </div>
+        <div class="preset-row" data-slot="4">
+          <input type="text" class="preset-name" id="preset-name-4" data-slot="4" placeholder="プリセット 4" maxlength="24">
+          <button type="button" class="btn btn-secondary preset-apply" data-slot="4" disabled>適用</button>
+          <button type="button" class="btn btn-secondary preset-save" data-slot="4" title="現在の設定をここに保存">保存</button>
+          <button type="button" class="icon-btn-sm preset-clear" data-slot="4" title="このプリセットを削除" aria-label="プリセット4を削除">✕</button>
+        </div>
+        <div class="preset-row" data-slot="5">
+          <input type="text" class="preset-name" id="preset-name-5" data-slot="5" placeholder="プリセット 5" maxlength="24">
+          <button type="button" class="btn btn-secondary preset-apply" data-slot="5" disabled>適用</button>
+          <button type="button" class="btn btn-secondary preset-save" data-slot="5" title="現在の設定をここに保存">保存</button>
+          <button type="button" class="icon-btn-sm preset-clear" data-slot="5" title="このプリセットを削除" aria-label="プリセット5を削除">✕</button>
+        </div>
+      </div>
+      <span style="font-size:10px; color:var(--text-muted);">額縁色・フォント・文字サイズなどの見た目の設定が保存されます（このブラウザのみ）。撮影データは含まれません。</span>
+    </div>
+
+    <!-- 1. 画像読み込み -->
+    <div class="section">
+      <div class="section-title">1. Image Source</div>
+      <div id="dropzone" role="button" tabindex="0" aria-label="写真をドロップまたは選択">
+        <p id="file-name">写真をドロップまたは選択</p>
+        <span>JPEG / PNG / WebP 対応（ブラウザ内完結）</span>
+        <input type="file" id="file-input" accept="image/jpeg,image/png,image/webp" hidden>
+      </div>
+    </div>
+
+    <!-- 2. EXIFデータ編集 -->
+    <div class="section">
+      <div class="section-title">2. Metadata &amp; Credit</div>
+      <div class="field">
+        <label for="in-camera">Camera Model</label>
+        <input type="text" id="in-camera" placeholder="例: OLYMPUS OM-10 / SONY ILCE-7M4">
+      </div>
+      <div class="field">
+        <label for="in-lens">Lens Model</label>
+        <input type="text" id="in-lens" placeholder="例: ZUIKO 50mm F1.8">
+      </div>
+      <div class="row-2">
+        <div class="field">
+          <label for="in-focal">Focal Length</label>
+          <input type="text" id="in-focal" placeholder="50mm">
+        </div>
+        <div class="field">
+          <label for="in-aperture">Aperture</label>
+          <input type="text" id="in-aperture" placeholder="f/1.8">
+        </div>
+      </div>
+      <div class="row-2">
+        <div class="field">
+          <label for="in-shutter">Shutter Speed</label>
+          <input type="text" id="in-shutter" placeholder="1/250s">
+        </div>
+        <div class="field">
+          <label for="in-iso">ISO</label>
+          <input type="text" id="in-iso" placeholder="ISO 400">
+        </div>
+      </div>
+      <div class="row-2">
+        <div class="field">
+          <label for="in-date">Date / Film</label>
+          <input type="text" id="in-date" placeholder="2026.11.13">
+        </div>
+        <div class="field">
+          <label for="in-credit">Credit / Watermark</label>
+          <input type="text" id="in-credit" placeholder="© Sho Tsuruta">
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. サイズ・比率・レイアウト -->
+    <div class="section">
+      <div class="section-title">3. Size &amp; Frame Geometry</div>
+      <div class="field">
+        <label for="sel-aspect">Frame Aspect Ratio (出力比率)</label>
+        <select id="sel-aspect">
+          <option value="auto" selected>Auto（元画像の比率に追従）</option>
+          <optgroup label="正方形・SNS">
+            <option value="1:1">1:1（正方形 / Instagram / 6x6中判）</option>
+            <option value="4:5">4:5（Instagram 縦長 / 8x10大判）</option>
+            <option value="9:16">9:16（ストーリーズ / スマホ壁紙）</option>
+          </optgroup>
+          <optgroup label="プリント規格・白銀比">
+            <option value="5:7">5:7（2L判 ポートレート縦）</option>
+            <option value="7:5">7:5（2L判 ランドスケープ横）</option>
+            <option value="1:1.414">1:√2（A4/A3 白銀比 縦）</option>
+            <option value="1.414:1">√2:1（A4/A3 白銀比 横）</option>
+            <option value="10:12">10:12（四つ切 縦）</option>
+            <option value="12:10">12:10（四つ切 横）</option>
+          </optgroup>
+          <optgroup label="カメラ・中判・シネマ">
+            <option value="3:2">3:2（35mmフルサイズ・一眼横）</option>
+            <option value="2:3">2:3（35mmフルサイズ・一眼縦）</option>
+            <option value="4:3">4:3（マイクロフォーサーズ / 645中判）</option>
+            <option value="3:4">3:4（4:3 縦）</option>
+            <option value="7:6">7:6（6x7中判 横）</option>
+            <option value="6:7">6:7（6x7中判 縦）</option>
+            <option value="16:9">16:9（シネマワイド）</option>
+            <option value="65:24">65:24（XPan パノラマ）</option>
+          </optgroup>
+        </select>
+      </div>
+
+      <div class="row-2">
+        <div class="field">
+          <label for="sel-fit">Photo Fit Mode</label>
+          <select id="sel-fit">
+            <option value="contain" selected>余白優先 (Contain)</option>
+            <option value="cover">枠充填トリミング (Cover)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="sel-layout">Layout Style</label>
+          <select id="sel-layout">
+            <option value="split" selected>左右分割 (Classic)</option>
+            <option value="center">中央揃え (Gallery)</option>
+            <option value="minimal">1行ミニマル (Minimal)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="rng-scale">Photo Scale (写真サイズ倍率) <span id="val-scale">100%</span></label>
+        <input type="range" id="rng-scale" min="50" max="100" value="100">
+      </div>
+
+      <div class="field">
+        <label for="rng-margin">Outer Margin (外周余白) <span id="val-margin">4.5%</span></label>
+        <input type="range" id="rng-margin" min="0" max="15" step="0.5" value="4.5">
+      </div>
+
+      <div class="field">
+        <label for="rng-footer">EXIF Bar Height (下部情報エリア高さ) <span id="val-footer">13%</span></label>
+        <input type="range" id="rng-footer" min="8" max="26" step="0.5" value="13">
+      </div>
+
+      <div class="field">
+        <label for="rng-radius">Corner Radius (写真の角丸) <span id="val-radius">0px</span></label>
+        <input type="range" id="rng-radius" min="0" max="40" value="0">
+      </div>
+    </div>
+
+    <!-- 4. タイポグラフィ -->
+    <div class="section">
+      <div class="section-title">4. Typography &amp; Math Numbers</div>
+      <div class="field">
+        <label for="sel-font-title">Camera / Lens Font (機材名フォント)</label>
+        <select id="sel-font-title">
+          <optgroup label="モダン・クリーン (Sans-Serif)">
+            <option value="'Inter', sans-serif" selected>Inter (スタンダード)</option>
+            <option value="'Plus Jakarta Sans', sans-serif">Plus Jakarta Sans</option>
+            <option value="'Montserrat', sans-serif">Montserrat</option>
+            <option value="'DM Sans', sans-serif">DM Sans</option>
+            <option value="'Work Sans', sans-serif">Work Sans</option>
+            <option value="'Manrope', sans-serif">Manrope</option>
+            <option value="'Outfit', sans-serif">Outfit (幾何学)</option>
+            <option value="'Sora', sans-serif">Sora</option>
+            <option value="'Archivo', sans-serif">Archivo (グロテスク)</option>
+            <option value="'Oswald', sans-serif">Oswald (コンデンス)</option>
+          </optgroup>
+          <optgroup label="高級図録・クラシック (Serif)">
+            <option value="'Bodoni Moda', serif">Bodoni Moda (ハイファッション)</option>
+            <option value="'Playfair Display', serif">Playfair Display</option>
+            <option value="'EB Garamond', serif">EB Garamond (学術・古典)</option>
+            <option value="'Cinzel', serif">Cinzel (碑文・展示タイトル)</option>
+            <option value="'Cormorant Garamond', serif">Cormorant Garamond</option>
+            <option value="'Spectral', serif">Spectral</option>
+            <option value="'Lora', serif">Lora</option>
+            <option value="'Libre Baskerville', serif">Libre Baskerville</option>
+            <option value="'Crimson Pro', serif">Crimson Pro</option>
+            <option value="'Fraunces', serif">Fraunces (エディトリアル)</option>
+          </optgroup>
+          <optgroup label="レトロ・ディスプレイ">
+            <option value="'Bebas Neue', sans-serif">Bebas Neue (凝縮キャップス)</option>
+            <option value="'Anton', sans-serif">Anton (極太見出し)</option>
+            <option value="'Abril Fatface', serif">Abril Fatface</option>
+            <option value="'Unica One', sans-serif">Unica One (アーケード)</option>
+          </optgroup>
+          <optgroup label="和文フォント">
+            <option value="'Shippori Mincho', serif">しっぽり明朝</option>
+            <option value="'Shippori Antique', sans-serif">しっぽり明朝 アンティーク</option>
+            <option value="'Zen Old Mincho', serif">Zen Old Mincho (旧明朝)</option>
+            <option value="'Zen Kaku Gothic New', sans-serif">Zen角ゴシック New</option>
+            <option value="'Kaisei Decol', serif">解星デコール</option>
+            <option value="'Noto Serif JP', serif">Noto Serif JP (明朝)</option>
+            <option value="'Noto Sans JP', sans-serif">Noto Sans JP (ゴシック)</option>
+          </optgroup>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="sel-font-num">Numbers &amp; Params Font (数値・パラメータ専用)</label>
+        <select id="sel-font-num">
+          <optgroup label="工業計器・レンズ刻印 (Monospace)">
+            <option value="'Chivo Mono', monospace" selected>Chivo Mono (精緻・工業系)</option>
+            <option value="'JetBrains Mono', monospace">JetBrains Mono (クリア等幅)</option>
+            <option value="'IBM Plex Mono', monospace">IBM Plex Mono</option>
+            <option value="'Space Mono', monospace">Space Mono (レトロ機械)</option>
+            <option value="'Fira Code', monospace">Fira Code</option>
+            <option value="'DM Mono', monospace">DM Mono</option>
+            <option value="'Roboto Mono', monospace">Roboto Mono</option>
+            <option value="'Red Hat Mono', monospace">Red Hat Mono</option>
+            <option value="'Source Code Pro', monospace">Source Code Pro</option>
+            <option value="'Martian Mono', monospace">Martian Mono (宇宙計器風)</option>
+            <option value="'Share Tech Mono', monospace">Share Tech Mono (デジタル計器)</option>
+          </optgroup>
+          <optgroup label="オールドスタイル・図録数字 (Serif / Sans)">
+            <option value="'EB Garamond', serif">EB Garamond (古典数字)</option>
+            <option value="'Bodoni Moda', serif">Bodoni Moda</option>
+            <option value="'Lora', serif">Lora</option>
+            <option value="'Libre Baskerville', serif">Libre Baskerville</option>
+            <option value="'Crimson Pro', serif">Crimson Pro</option>
+            <option value="'Inter', sans-serif">Inter (ニュートラル)</option>
+            <option value="'Montserrat', sans-serif">Montserrat</option>
+            <option value="'Work Sans', sans-serif">Work Sans</option>
+          </optgroup>
+        </select>
+      </div>
+
+      <div class="row-2">
+        <div class="field">
+          <label for="sel-sep">Separator (区切り記号)</label>
+          <select id="sel-sep">
+            <option value="   " selected>スペース (空白)</option>
+            <option value=" • ">中黒 ( • )</option>
+            <option value=" | ">縦線 ( | )</option>
+            <option value=" / ">スラッシュ ( / )</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="rng-fscale">Font Scale <span id="val-fscale">1.0x</span></label>
+          <input type="range" id="rng-fscale" min="0.6" max="1.6" step="0.05" value="1.0">
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="rng-tracking">Number Letter Spacing (数値の字間) <span id="val-tracking">0.04em</span></label>
+        <input type="range" id="rng-tracking" min="-0.02" max="0.20" step="0.01" value="0.04">
+      </div>
+
+      <label class="checkbox-row">
+        <input type="checkbox" id="chk-upper" checked>
+        <span>機材名を大文字で統一 (UPPERCASE)</span>
+      </label>
+    </div>
+
+    <!-- 5. フレームカラー -->
+    <div class="section">
+      <div class="section-title">5. Frame &amp; Text Color</div>
+      <div class="color-row">
+        <div class="swatch" style="background:#ffffff;" data-bg="#ffffff" title="Pure White"></div>
+        <div class="swatch" style="background:#f6f5f2;" data-bg="#f6f5f2" title="Museum Mat White"></div>
+        <div class="swatch" style="background:#e5e5e5;" data-bg="#e5e5e5" title="Archival Gray"></div>
+        <div class="swatch" style="background:#18181b;" data-bg="#18181b" title="Matte Charcoal"></div>
+        <div class="swatch" style="background:#09090b;" data-bg="#09090b" title="Deep Black"></div>
+        <input type="color" id="inp-bgcolor" value="#ffffff" title="カスタム背景色">
+      </div>
+      <label class="checkbox-row">
+        <input type="checkbox" id="chk-shadow">
+        <span>写真にドロップシャドウ（立体感）を追加</span>
+      </label>
+    </div>
+  </div>
+
+  <!-- 保存・書き出し -->
+  <div class="sidebar-footer">
+    <div class="row-2" style="align-items: center;">
+      <label for="sel-export-res" style="margin:0;">書き出し最大長辺</label>
+      <select id="sel-export-res">
+        <option value="original">Original (原寸維持)</option>
+        <option value="4000" selected>4000px (高画質・推奨)</option>
+        <option value="2560">2560px (SNS・Web最適)</option>
+        <option value="1920">1920px (軽量)</option>
+      </select>
+    </div>
+    <button id="btn-export" class="btn btn-primary" disabled>フレーム画像を書き出して保存</button>
+    <div id="status-bar" role="status" aria-live="polite"></div>
+  </div>
+</aside>
+
+<!-- 右側プレビューワークスペース -->
+<main id="workspace">
+  <div id="empty-state">
+    <h2>写真をドロップして開始</h2>
+    <p>EXIF自動読み取り・比率変更・高解像度書き出し対応</p>
+  </div>
+
+  <div id="canvas-wrapper">
+    <canvas id="preview-canvas"></canvas>
+  </div>
+
+  <div id="zoom-controls">
+    <button class="zoom-btn" id="zoom-out" title="縮小" aria-label="縮小">−</button>
+    <span id="zoom-label">FIT</span>
+    <button class="zoom-btn" id="zoom-in" title="拡大" aria-label="拡大">＋</button>
+    <button class="zoom-btn" id="zoom-fit" title="画面に合わせる">Fit</button>
+    <button class="zoom-btn" id="zoom-100" title="等倍表示">100%</button>
+  </div>
+</main>
+
+<!-- EXIF詳細モーダル -->
+<div id="exif-modal">
+  <div class="modal-card">
+    <div class="modal-header">
+      <strong>検出されたEXIFメタデータ詳細</strong>
+      <button class="btn btn-secondary" id="close-exif-btn">閉じる</button>
+    </div>
+    <div class="modal-body">
+      <table class="exif-table" id="exif-table-body"></table>
+    </div>
+  </div>
+</div>
+
+<script>
+  // 状態管理
+  let loadedImg = null;
+  let currentFileName = 'photo';
+
+  // ビューアのズーム＆パン状態
+  let zoomLevel = 1;
+  let panX = 0;
+  let panY = 0;
+  let isDragging = false;
+  let startX = 0;
+  let startY = 0;
+  let isFitMode = true;
+
+  // DOM要素
+  const workspace = document.getElementById('workspace');
+  const canvasWrapper = document.getElementById('canvas-wrapper');
+  const previewCanvas = document.getElementById('preview-canvas');
+  const statusBar = document.getElementById('status-bar');
+  const btnExport = document.getElementById('btn-export');
+  const openExifBtn = document.getElementById('open-exif-btn');
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('overlay');
+  const menuToggle = document.getElementById('menu-toggle');
+
+  // モバイル用 サイドバー開閉
+  function setSidebarOpen(open) {
+    sidebar.classList.toggle('open', open);
+    overlay.classList.toggle('open', open);
+    menuToggle.setAttribute('aria-expanded', String(open));
+  }
+  menuToggle.addEventListener('click', () => setSidebarOpen(!sidebar.classList.contains('open')));
+  overlay.addEventListener('click', () => setSidebarOpen(false));
+
+  // 入力要素バインド
+  const inputs = {
+    camera: document.getElementById('in-camera'),
+    lens: document.getElementById('in-lens'),
+    focal: document.getElementById('in-focal'),
+    aperture: document.getElementById('in-aperture'),
+    shutter: document.getElementById('in-shutter'),
+    iso: document.getElementById('in-iso'),
+    date: document.getElementById('in-date'),
+    credit: document.getElementById('in-credit'),
+    aspect: document.getElementById('sel-aspect'),
+    fit: document.getElementById('sel-fit'),
+    layout: document.getElementById('sel-layout'),
+    scale: document.getElementById('rng-scale'),
+    margin: document.getElementById('rng-margin'),
+    footer: document.getElementById('rng-footer'),
+    radius: document.getElementById('rng-radius'),
+    fontTitle: document.getElementById('sel-font-title'),
+    fontNum: document.getElementById('sel-font-num'),
+    sep: document.getElementById('sel-sep'),
+    fscale: document.getElementById('rng-fscale'),
+    tracking: document.getElementById('rng-tracking'),
+    upper: document.getElementById('chk-upper'),
+    bgColor: document.getElementById('inp-bgcolor'),
+    shadow: document.getElementById('chk-shadow'),
+    exportRes: document.getElementById('sel-export-res')
+  };
+
+  // ファイルドロップ＆選択処理
+  const dropzone = document.getElementById('dropzone');
+  const fileInput = document.getElementById('file-input');
+
+  dropzone.addEventListener('click', () => fileInput.click());
+  dropzone.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); }
+  });
+
+  fileInput.addEventListener('change', (e) => {
+    if (e.target.files[0]) processFile(e.target.files[0]);
+  });
+
+  ['dragenter', 'dragover'].forEach(evt => {
+    dropzone.addEventListener(evt, (e) => { e.preventDefault(); dropzone.classList.add('dragover'); });
+    workspace.addEventListener(evt, (e) => e.preventDefault());
+  });
+  ['dragleave', 'drop'].forEach(evt => {
+    dropzone.addEventListener(evt, (e) => { e.preventDefault(); dropzone.classList.remove('dragover'); });
+  });
+
+  dropzone.addEventListener('drop', (e) => {
+    if (e.dataTransfer.files[0]) processFile(e.dataTransfer.files[0]);
+  });
+  workspace.addEventListener('drop', (e) => {
+    e.preventDefault();
+    if (e.dataTransfer.files[0]) processFile(e.dataTransfer.files[0]);
+  });
+
+  // 全コントロールのリアルタイム更新
+  Object.values(inputs).forEach(el => {
+    el.addEventListener('input', () => {
+      updateLabels();
+      if (loadedImg) renderPreview();
+    });
+    el.addEventListener('change', () => {
+      updateLabels();
+      if (loadedImg) {
+        renderPreview();
+        if (el === inputs.aspect && isFitMode) fitToScreen();
+      }
+    });
+  });
+
+  // カラースウォッチ
+  document.querySelectorAll('.swatch').forEach(sw => {
+    sw.addEventListener('click', () => {
+      inputs.bgColor.value = sw.dataset.bg;
+      if (loadedImg) renderPreview();
+    });
+  });
+
+  function updateLabels() {
+    document.getElementById('val-scale').textContent = `${inputs.scale.value}%`;
+    document.getElementById('val-margin').textContent = `${inputs.margin.value}%`;
+    document.getElementById('val-footer').textContent = `${inputs.footer.value}%`;
+    document.getElementById('val-radius').textContent = `${inputs.radius.value}px`;
+    document.getElementById('val-fscale').textContent = `${parseFloat(inputs.fscale.value).toFixed(2)}x`;
+    document.getElementById('val-tracking').textContent = `${parseFloat(inputs.tracking.value).toFixed(2)}em`;
+  }
+
+  // EXIF読み取り＆画像ロード
+  async function processFile(file) {
+    if (!file.type.startsWith('image/')) {
+      statusBar.textContent = '画像ファイルを選択してください';
+      return;
+    }
+
+    currentFileName = file.name.replace(/\.[^/.]+$/, "");
+    document.getElementById('file-name').textContent = file.name;
+    statusBar.textContent = 'EXIFメタデータを解析中...';
+
+    try {
+      const exif = (typeof exifr !== 'undefined') ? (await exifr.parse(file, true) || {}) : {};
+      populateExifFields(exif);
+      populateExifModal(exif, file);
+
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const img = new Image();
+        img.onload = async () => {
+          loadedImg = img;
+          document.getElementById('empty-state').style.display = 'none';
+          btnExport.disabled = false;
+          openExifBtn.disabled = false;
+          if (document.fonts && document.fonts.ready) { await document.fonts.ready; }
+          renderPreview();
+          fitToScreen();
+          statusBar.textContent = `読込完了 (${img.naturalWidth} × ${img.naturalHeight}px)`;
+          if (window.innerWidth <= 860) setSidebarOpen(false);
+        };
+        img.onerror = () => { statusBar.textContent = '画像の読み込みに失敗しました'; };
+        img.src = ev.target.result;
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      console.error(err);
+      statusBar.textContent = 'EXIF解析エラー（画像のみ読み込みます）';
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const img = new Image();
+        img.onload = () => {
+          loadedImg = img;
+          document.getElementById('empty-state').style.display = 'none';
+          btnExport.disabled = false;
+          renderPreview();
+          fitToScreen();
+        };
+        img.src = ev.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+  }
+
+  function populateExifFields(exif) {
+    const make = (exif.Make || '').trim();
+    let model = (exif.Model || '').trim();
+    if (make && model && !model.toLowerCase().startsWith(make.toLowerCase())) {
+      model = `${make} ${model}`;
+    }
+    inputs.camera.value = model || make || '';
+    inputs.lens.value = (exif.LensModel || exif.Lens || '').trim();
+
+    inputs.focal.value = exif.FocalLength ? `${Math.round(exif.FocalLength)}mm` : '';
+    inputs.aperture.value = exif.FNumber ? `f/${Number(exif.FNumber).toFixed(1).replace(/\.0$/, '')}` : '';
+
+    if (exif.ExposureTime) {
+      const t = Number(exif.ExposureTime);
+      inputs.shutter.value = t < 1 ? `1/${Math.round(1 / t)}s` : `${t}s`;
+    } else {
+      inputs.shutter.value = '';
+    }
+
+    const isoVal = exif.ISO || exif.PhotographicSensitivity;
+    inputs.iso.value = isoVal ? `ISO ${isoVal}` : '';
+
+    if (exif.DateTimeOriginal instanceof Date) {
+      const d = exif.DateTimeOriginal;
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      inputs.date.value = `${y}.${m}.${day}`;
+    } else {
+      inputs.date.value = '';
+    }
+
+    if (exif.Artist || exif.Copyright) {
+      inputs.credit.value = `© ${exif.Artist || exif.Copyright}`;
+    }
+  }
+
+  function populateExifModal(exif, file) {
+    const tbody = document.getElementById('exif-table-body');
+    tbody.innerHTML = '';
+    const entries = [
+      ['ファイル名', file.name],
+      ['カメラメーカー', exif.Make],
+      ['カメラ機種', exif.Model],
+      ['レンズモデル', exif.LensModel],
+      ['焦点距離', exif.FocalLength ? `${exif.FocalLength} mm` : null],
+      ['35mm換算焦点距離', exif.FocalLengthIn35mmFormat ? `${exif.FocalLengthIn35mmFormat} mm` : null],
+      ['絞り値 (F値)', exif.FNumber ? `f/${exif.FNumber}` : null],
+      ['シャッタースピード', exif.ExposureTime ? (exif.ExposureTime < 1 ? `1/${Math.round(1 / exif.ExposureTime)}s` : `${exif.ExposureTime}s`) : null],
+      ['ISO感度', exif.ISO],
+      ['露出補正', exif.ExposureCompensation !== undefined ? `${exif.ExposureCompensation} EV` : null],
+      ['測光方式', exif.MeteringMode],
+      ['ホワイトバランス', exif.WhiteBalance],
+      ['撮影日時', exif.DateTimeOriginal ? exif.DateTimeOriginal.toString() : null],
+      ['現像ソフト', exif.Software]
+    ];
+
+    let count = 0;
+    entries.forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== '') {
+        count++;
+        const tr = document.createElement('tr');
+        const tdK = document.createElement('td');
+        tdK.textContent = k;
+        const tdV = document.createElement('td');
+        tdV.textContent = String(v);
+        tr.appendChild(tdK);
+        tr.appendChild(tdV);
+        tbody.appendChild(tr);
+      }
+    });
+    if (count === 0) {
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.colSpan = 2;
+      td.className = 'exif-empty';
+      td.textContent = 'この画像からはEXIFメタデータが検出されませんでした。';
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+    }
+  }
+
+  // 輝度判定（背景色に応じて文字色を自動最適化）
+  function isDarkColor(hex) {
+    const c = hex.replace('#', '');
+    const r = parseInt(c.substr(0, 2), 16);
+    const g = parseInt(c.substr(2, 2), 16);
+    const b = parseInt(c.substr(4, 2), 16);
+    const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
+    return yiq < 128;
+  }
+
+  // 寸法計算
+  function calculateGeometry(baseLongEdge) {
+    const origW = loadedImg.naturalWidth;
+    const origH = loadedImg.naturalHeight;
+    const imgAspect = origW / origH;
+
+    const aspectVal = inputs.aspect.value;
+    const marginPct = parseFloat(inputs.margin.value) / 100;
+    const footerPct = parseFloat(inputs.footer.value) / 100;
+    const photoScale = parseFloat(inputs.scale.value) / 100;
+
+    let canvasW, canvasH;
+
+    if (aspectVal === 'auto') {
+      if (origW >= origH) {
+        const contentW = baseLongEdge * (1 - marginPct * 2);
+        const contentH = contentW / imgAspect;
+        canvasW = Math.round(baseLongEdge);
+        canvasH = Math.round((contentH + canvasW * marginPct) / (1 - footerPct));
+      } else {
+        canvasH = Math.round(baseLongEdge);
+        const footerH = canvasH * footerPct;
+        const topPad = canvasH * marginPct;
+        const availH = canvasH - topPad - footerH;
+        const contentW = availH * imgAspect;
+        canvasW = Math.round(contentW / (1 - marginPct * 2));
+      }
+    } else {
+      const [rw, rh] = aspectVal.split(':').map(Number);
+      const targetRatio = rw / rh;
+      if (targetRatio >= 1) {
+        canvasW = Math.round(baseLongEdge);
+        canvasH = Math.round(baseLongEdge / targetRatio);
+      } else {
+        canvasH = Math.round(baseLongEdge);
+        canvasW = Math.round(baseLongEdge * targetRatio);
+      }
+    }
+
+    const minDim = Math.min(canvasW, canvasH);
+    const padSide = Math.round(minDim * marginPct);
+    const padTop = Math.round(minDim * marginPct);
+    const footerH = Math.round(canvasH * footerPct);
+
+    const slotW = Math.max(10, canvasW - padSide * 2);
+    const slotH = Math.max(10, canvasH - padTop - footerH);
+
+    let drawW, drawH;
+    if (inputs.fit.value === 'cover') {
+      drawW = slotW * photoScale;
+      drawH = slotH * photoScale;
+    } else {
+      const slotAspect = slotW / slotH;
+      if (imgAspect > slotAspect) {
+        drawW = slotW * photoScale;
+        drawH = drawW / imgAspect;
+      } else {
+        drawH = slotH * photoScale;
+        drawW = drawH * imgAspect;
+      }
+    }
+
+    const drawX = Math.round((canvasW - drawW) / 2);
+    const drawY = Math.round(padTop + (slotH - drawH) / 2);
+
+    return {
+      canvasW, canvasH,
+      drawX, drawY,
+      drawW: Math.round(drawW),
+      drawH: Math.round(drawH),
+      padSide, footerH,
+      slotBottom: canvasH - footerH
+    };
+  }
+
+  // メイン描画エンジン
+  function renderToCanvas(targetCanvas, baseLongEdge) {
+    const geo = calculateGeometry(baseLongEdge);
+    targetCanvas.width = geo.canvasW;
+    targetCanvas.height = geo.canvasH;
+
+    const ctx = targetCanvas.getContext('2d');
+    const bgHex = inputs.bgColor.value;
+    const dark = isDarkColor(bgHex);
+
+    ctx.fillStyle = bgHex;
+    ctx.fillRect(0, 0, geo.canvasW, geo.canvasH);
+
+    ctx.save();
+    if (inputs.shadow.checked) {
+      ctx.shadowColor = dark ? 'rgba(0,0,0,0.65)' : 'rgba(0,0,0,0.18)';
+      ctx.shadowBlur = Math.round(Math.min(geo.canvasW, geo.canvasH) * 0.025);
+      ctx.shadowOffsetY = Math.round(Math.min(geo.canvasW, geo.canvasH) * 0.01);
+    }
+
+    const radius = Math.round(parseFloat(inputs.radius.value) * (geo.canvasW / 1200));
+    if (radius > 0 && ctx.roundRect) {
+      ctx.beginPath();
+      ctx.roundRect(geo.drawX, geo.drawY, geo.drawW, geo.drawH, radius);
+      ctx.fillStyle = bgHex;
+      ctx.fill();
+      ctx.clip();
+    }
+
+    if (inputs.fit.value === 'cover') {
+      const sRatio = loadedImg.naturalWidth / loadedImg.naturalHeight;
+      const dRatio = geo.drawW / geo.drawH;
+      let sx = 0, sy = 0, sw = loadedImg.naturalWidth, sh = loadedImg.naturalHeight;
+      if (sRatio > dRatio) {
+        sw = loadedImg.naturalHeight * dRatio;
+        sx = (loadedImg.naturalWidth - sw) / 2;
+      } else {
+        sh = loadedImg.naturalWidth / dRatio;
+        sy = (loadedImg.naturalHeight - sh) / 2;
+      }
+      ctx.drawImage(loadedImg, sx, sy, sw, sh, geo.drawX, geo.drawY, geo.drawW, geo.drawH);
+    } else {
+      ctx.drawImage(loadedImg, geo.drawX, geo.drawY, geo.drawW, geo.drawH);
+    }
+    ctx.restore();
+
+    const textPrimary = dark ? '#f4f4f5' : '#18181b';
+    const textSecondary = dark ? '#a1a1aa' : '#71717a';
+
+    let camText = inputs.camera.value.trim();
+    let lensText = inputs.lens.value.trim();
+    if (inputs.upper.checked) {
+      camText = camText.toUpperCase();
+      lensText = lensText.toUpperCase();
+    }
+
+    const sep = inputs.sep.value;
+    const paramsList = [
+      inputs.focal.value.trim(),
+      inputs.aperture.value.trim(),
+      inputs.shutter.value.trim(),
+      inputs.iso.value.trim()
+    ].filter(Boolean);
+    const paramsText = paramsList.join(sep);
+
+    const subRightList = [
+      inputs.date.value.trim(),
+      inputs.credit.value.trim()
+    ].filter(Boolean);
+    const subRightText = subRightList.join('  ');
+
+    const fScale = parseFloat(inputs.fscale.value);
+    const baseUnit = Math.min(geo.canvasW * 0.021, geo.footerH * 0.24);
+    const sizeMain = Math.max(11, Math.round(baseUnit * fScale));
+    const sizeSub = Math.max(9, Math.round(sizeMain * 0.78));
+
+    const titleFont = inputs.fontTitle.value;
+    const numFont = inputs.fontNum.value;
+    const trackingPx = `${parseFloat(inputs.tracking.value)}em`;
+
+    const footerCenterY = geo.slotBottom + (geo.footerH * 0.5);
+    const lineOffset = Math.round(sizeMain * 0.72);
+    const sideX = Math.max(geo.padSide, Math.round(geo.canvasW * 0.045));
+
+    ctx.textBaseline = 'middle';
+
+    const layout = inputs.layout.value;
+
+    if (layout === 'split') {
+      const hasSubLeft = Boolean(lensText);
+      const topYLeft = hasSubLeft ? footerCenterY - lineOffset : footerCenterY;
+
+      ctx.textAlign = 'left';
+      ctx.letterSpacing = '0.02em';
+      ctx.font = `600 ${sizeMain}px ${titleFont}`;
+      ctx.fillStyle = textPrimary;
+      ctx.fillText(camText, sideX, topYLeft);
+
+      if (hasSubLeft) {
+        ctx.font = `400 ${sizeSub}px ${titleFont}`;
+        ctx.fillStyle = textSecondary;
+        ctx.fillText(lensText, sideX, footerCenterY + lineOffset);
+      }
+
+      const hasSubRight = Boolean(subRightText);
+      const topYRight = hasSubRight ? footerCenterY - lineOffset : footerCenterY;
+
+      ctx.textAlign = 'right';
+      ctx.letterSpacing = trackingPx;
+      ctx.font = `500 ${sizeMain}px ${numFont}`;
+      ctx.fillStyle = textPrimary;
+      ctx.fillText(paramsText, geo.canvasW - sideX, topYRight);
+
+      if (hasSubRight) {
+        ctx.letterSpacing = '0.03em';
+        ctx.font = `400 ${sizeSub}px ${titleFont}`;
+        ctx.fillStyle = textSecondary;
+        ctx.fillText(subRightText, geo.canvasW - sideX, footerCenterY + lineOffset);
+      }
+
+    } else if (layout === 'center') {
+      ctx.textAlign = 'center';
+      const cx = geo.canvasW / 2;
+
+      const gearLine = [camText, lensText].filter(Boolean).join('  |  ');
+      const infoLine = [paramsText, subRightText].filter(Boolean).join('   •   ');
+
+      ctx.letterSpacing = '0.04em';
+      ctx.font = `600 ${sizeMain}px ${titleFont}`;
+      ctx.fillStyle = textPrimary;
+      ctx.fillText(gearLine, cx, infoLine ? footerCenterY - lineOffset : footerCenterY);
+
+      if (infoLine) {
+        ctx.letterSpacing = trackingPx;
+        ctx.font = `400 ${sizeSub}px ${numFont}`;
+        ctx.fillStyle = textSecondary;
+        ctx.fillText(infoLine, cx, footerCenterY + lineOffset);
+      }
+
+    } else if (layout === 'minimal') {
+      ctx.textAlign = 'center';
+      const cx = geo.canvasW / 2;
+      const singleLine = [camText, lensText, paramsText].filter(Boolean).join('   •   ');
+
+      ctx.letterSpacing = trackingPx;
+      ctx.font = `500 ${sizeSub}px ${numFont}`;
+      ctx.fillStyle = textPrimary;
+      ctx.fillText(singleLine, cx, footerCenterY);
+    }
+
+    ctx.letterSpacing = '0px';
+  }
+
+  function renderPreview() {
+    renderToCanvas(previewCanvas, 1400);
+    if (isFitMode) fitToScreen();
+  }
+
+  // ズーム＆パン制御
+  function applyTransform() {
+    canvasWrapper.style.transform = `translate(${panX}px, ${panY}px) scale(${zoomLevel})`;
+    document.getElementById('zoom-label').textContent = isFitMode ? 'FIT' : `${Math.round(zoomLevel * 100)}%`;
+  }
+
+  function fitToScreen() {
+    if (!previewCanvas.width || !previewCanvas.height) return;
+    isFitMode = true;
+    const pad = 64;
+    const availW = workspace.clientWidth - pad;
+    const availH = workspace.clientHeight - pad;
+    zoomLevel = Math.min(availW / previewCanvas.width, availH / previewCanvas.height, 1);
+    panX = 0;
+    panY = 0;
+    applyTransform();
+  }
+
+  document.getElementById('zoom-in').addEventListener('click', () => {
+    isFitMode = false;
+    zoomLevel = Math.min(zoomLevel * 1.25, 4);
+    applyTransform();
+  });
+
+  document.getElementById('zoom-out').addEventListener('click', () => {
+    isFitMode = false;
+    zoomLevel = Math.max(zoomLevel / 1.25, 0.15);
+    applyTransform();
+  });
+
+  document.getElementById('zoom-fit').addEventListener('click', fitToScreen);
+
+  document.getElementById('zoom-100').addEventListener('click', () => {
+    isFitMode = false;
+    zoomLevel = 1;
+    panX = 0;
+    panY = 0;
+    applyTransform();
+  });
+
+  workspace.addEventListener('wheel', (e) => {
+    if (!loadedImg) return;
+    e.preventDefault();
+    isFitMode = false;
+    const delta = e.deltaY < 0 ? 1.1 : 0.9;
+    zoomLevel = Math.min(Math.max(zoomLevel * delta, 0.15), 4);
+    applyTransform();
+  }, { passive: false });
+
+  workspace.addEventListener('mousedown', (e) => {
+    if (!loadedImg || e.target.closest('#zoom-controls')) return;
+    isDragging = true;
+    startX = e.clientX - panX;
+    startY = e.clientY - panY;
+  });
+
+  window.addEventListener('mousemove', (e) => {
+    if (!isDragging) return;
+    isFitMode = false;
+    panX = e.clientX - startX;
+    panY = e.clientY - startY;
+    applyTransform();
+  });
+
+  window.addEventListener('mouseup', () => { isDragging = false; });
+  window.addEventListener('resize', () => { if (loadedImg && isFitMode) fitToScreen(); });
+
+  // タッチでのパン（1本指）・ピンチズーム（2本指）
+  let touchStartDist = null;
+  let touchStartZoom = 1;
+  workspace.addEventListener('touchstart', (e) => {
+    if (!loadedImg) return;
+    if (e.touches.length === 1) {
+      isDragging = true;
+      startX = e.touches[0].clientX - panX;
+      startY = e.touches[0].clientY - panY;
+    } else if (e.touches.length === 2) {
+      isDragging = false;
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      touchStartDist = Math.hypot(dx, dy);
+      touchStartZoom = zoomLevel;
+    }
+  }, { passive: true });
+
+  workspace.addEventListener('touchmove', (e) => {
+    if (!loadedImg) return;
+    if (e.touches.length === 1 && isDragging) {
+      isFitMode = false;
+      panX = e.touches[0].clientX - startX;
+      panY = e.touches[0].clientY - startY;
+      applyTransform();
+    } else if (e.touches.length === 2 && touchStartDist) {
+      e.preventDefault();
+      isFitMode = false;
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const dist = Math.hypot(dx, dy);
+      zoomLevel = Math.min(Math.max(touchStartZoom * (dist / touchStartDist), 0.15), 4);
+      applyTransform();
+    }
+  }, { passive: false });
+
+  workspace.addEventListener('touchend', () => { isDragging = false; touchStartDist = null; });
+
+  // EXIFモーダル制御
+  const exifModal = document.getElementById('exif-modal');
+  openExifBtn.addEventListener('click', () => exifModal.classList.add('open'));
+  document.getElementById('close-exif-btn').addEventListener('click', () => exifModal.classList.remove('open'));
+  exifModal.addEventListener('click', (e) => {
+    if (e.target === exifModal) exifModal.classList.remove('open');
+  });
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      exifModal.classList.remove('open');
+      setSidebarOpen(false);
+    }
+  });
+
+  // ダウンロード機能（claude.ai上ではdownloads capability経由、それ以外では通常のBlobリンク）
+  let downloadsNs = null;
+  let downloadsChecked = false;
+  async function getDownloads() {
+    if (downloadsChecked) return downloadsNs;
+    downloadsChecked = true;
+    try {
+      if (window.claude && typeof window.claude.use === 'function') {
+        downloadsNs = await window.claude.use('downloads');
+      }
+    } catch (e) { downloadsNs = null; }
+    return downloadsNs;
+  }
+
+  // 安全な高画質Blobエクスポート
+  btnExport.addEventListener('click', async () => {
+    if (!loadedImg) return;
+
+    btnExport.disabled = true;
+    statusBar.textContent = '高解像度フレームを生成中...';
+
+    if (document.fonts && document.fonts.ready) { await document.fonts.ready; }
+
+    setTimeout(async () => {
+      try {
+        const offscreen = document.createElement('canvas');
+        const origLong = Math.max(loadedImg.naturalWidth, loadedImg.naturalHeight);
+        const choice = inputs.exportRes.value;
+        const targetLong = choice === 'original' ? origLong : Math.min(parseInt(choice, 10), origLong);
+
+        renderToCanvas(offscreen, targetLong);
+
+        offscreen.toBlob(async (blob) => {
+          if (!blob) {
+            statusBar.textContent = '書き出し失敗（解像度を下げて再試行してください）';
+            btnExport.disabled = false;
+            return;
+          }
+
+          const filename = `${currentFileName}_framed.jpg`;
+          const downloads = await getDownloads();
+
+          if (downloads) {
+            try {
+              await downloads.save({ filename, data: blob });
+              statusBar.textContent = `保存完了 (${offscreen.width} × ${offscreen.height}px)`;
+            } catch (err) {
+              if (err && err.code === 'declined') {
+                statusBar.textContent = '保存はキャンセルされました';
+              } else {
+                statusBar.textContent = '保存に失敗しました。もう一度お試しください';
+              }
+            }
+            btnExport.disabled = false;
+            return;
+          }
+
+          // downloads capability が使えない環境（単体のHTMLとして開いている場合など）への代替
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = filename;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+
+          setTimeout(() => URL.revokeObjectURL(url), 1500);
+          statusBar.textContent = `保存完了 (${offscreen.width} × ${offscreen.height}px)`;
+          btnExport.disabled = false;
+        }, 'image/jpeg', 0.95);
+
+      } catch (err) {
+        console.error(err);
+        statusBar.textContent = `エラー: ${err.message}`;
+        btnExport.disabled = false;
+      }
+    }, 60);
+  });
+
+  // ============ プリセット（額縁・フォント・サイズ設定を5つまで保存） ============
+  const PRESET_KEY = 'exifFrameStudio.presets.v1';
+  const PRESET_FIELDS = ['aspect', 'fit', 'layout', 'scale', 'margin', 'footer', 'radius', 'fontTitle', 'fontNum', 'sep', 'fscale', 'tracking', 'upper', 'bgColor', 'shadow', 'exportRes'];
+
+  function loadPresets() {
+    try {
+      const raw = localStorage.getItem(PRESET_KEY);
+      if (raw) {
+        const arr = JSON.parse(raw);
+        if (Array.isArray(arr) && arr.length === 5) return arr;
+      }
+    } catch (e) { /* プライベートブラウズ等で失敗しても致命的ではない */ }
+    return [null, null, null, null, null];
+  }
+
+  function savePresetsToStorage() {
+    try { localStorage.setItem(PRESET_KEY, JSON.stringify(presets)); } catch (e) { /* 保存できなくても続行 */ }
+  }
+
+  // 初回アクセス時のみ、プリセット1・2に「一番シンプルで美しい」基本形（白／黒）を仕込んでおく。
+  // 一度でも保存データがあれば（ユーザーが削除していても）二度と上書きしない。
+  let hasStoredPresets = false;
+  try { hasStoredPresets = !!localStorage.getItem(PRESET_KEY); } catch (e) { hasStoredPresets = false; }
+
+  let presets = loadPresets();
+
+  if (!hasStoredPresets) {
+    const SIMPLE_BASE = {
+      aspect: 'auto',
+      fit: 'contain',
+      layout: 'center',
+      scale: '100',
+      margin: '6',
+      footer: '12',
+      radius: '0',
+      fontTitle: "'Inter', sans-serif",
+      fontNum: "'Inter', sans-serif",
+      sep: '   ',
+      fscale: '0.9',
+      tracking: '0.04',
+      upper: true,
+      shadow: false,
+      exportRes: '4000'
+    };
+    presets[0] = { name: 'シンプル（白）', settings: { ...SIMPLE_BASE, bgColor: '#ffffff' } };
+    presets[1] = { name: 'シンプル（黒）', settings: { ...SIMPLE_BASE, bgColor: '#09090b' } };
+    savePresetsToStorage();
+  }
+
+  function captureCurrentSettings() {
+    const s = {};
+    PRESET_FIELDS.forEach((key) => {
+      const el = inputs[key];
+      if (!el) return;
+      s[key] = (el.type === 'checkbox') ? el.checked : el.value;
+    });
+    return s;
+  }
+
+  function applyPresetSettings(s) {
+    PRESET_FIELDS.forEach((key) => {
+      const el = inputs[key];
+      if (!el || !(key in s)) return;
+      if (el.type === 'checkbox') el.checked = !!s[key];
+      else el.value = s[key];
+    });
+    updateLabels();
+    if (loadedImg) renderPreview();
+  }
+
+  function refreshPresetUI() {
+    for (let i = 0; i < 5; i++) {
+      const slot = i + 1;
+      const nameInput = document.getElementById(`preset-name-${slot}`);
+      const applyBtn = document.querySelector(`.preset-apply[data-slot="${slot}"]`);
+      const data = presets[i];
+      if (data) {
+        nameInput.value = data.name || `プリセット ${slot}`;
+        applyBtn.disabled = false;
+        applyBtn.classList.add('has-data');
+      } else {
+        applyBtn.disabled = true;
+        applyBtn.classList.remove('has-data');
+      }
+    }
+  }
+
+  document.querySelectorAll('.preset-apply').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const slot = parseInt(btn.dataset.slot, 10) - 1;
+      const data = presets[slot];
+      if (!data) return;
+      applyPresetSettings(data.settings);
+      statusBar.textContent = `プリセット「${data.name}」を適用しました`;
+    });
+  });
+
+  document.querySelectorAll('.preset-save').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const slot = parseInt(btn.dataset.slot, 10) - 1;
+      const nameInput = document.getElementById(`preset-name-${slot + 1}`);
+      const name = nameInput.value.trim() || `プリセット ${slot + 1}`;
+      presets[slot] = { name, settings: captureCurrentSettings() };
+      savePresetsToStorage();
+      refreshPresetUI();
+      statusBar.textContent = `現在の設定を「${name}」として保存しました`;
+    });
+  });
+
+  document.querySelectorAll('.preset-clear').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const slot = parseInt(btn.dataset.slot, 10) - 1;
+      presets[slot] = null;
+      savePresetsToStorage();
+      const nameInput = document.getElementById(`preset-name-${slot + 1}`);
+      nameInput.value = '';
+      refreshPresetUI();
+      statusBar.textContent = `プリセット ${slot + 1} を削除しました`;
+    });
+  });
+
+  document.querySelectorAll('.preset-name').forEach((inp) => {
+    inp.addEventListener('change', () => {
+      const slot = parseInt(inp.dataset.slot, 10) - 1;
+      if (presets[slot]) {
+        presets[slot].name = inp.value.trim() || `プリセット ${slot + 1}`;
+        savePresetsToStorage();
+      }
+    });
+  });
+
+  refreshPresetUI();
+
+  updateLabels();
+</script>
